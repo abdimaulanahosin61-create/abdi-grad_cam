@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+
+{% block title %}Hasil Visualisasi Grad-CAM #{{ record.id }} • FaceGradCAM{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Slider Customization */
+    input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #06b6d4;
+        cursor: pointer;
+        box-shadow: 0 0 10px rgba(6, 182, 212, 0.7);
+    }
+    
+    /* Target Box Pulsing */
+    @keyframes target-pulse {
+        0%, 100% { opacity: 0.95; box-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
+        50% { opacity: 0.6; box-shadow: 0 0 20px rgba(6, 182, 212, 0.9); }
+    }
+    .animate-target-box {
+        animation: target-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+    
+    <!-- Header Title & Action Buttons -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-800">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-semibold tracking-wide mb-3 bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                VISUALISASI GRAD-CAM #{{ record.id }} • RESNET-18 EXPLAINABLE AI
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-3">
+                Hasil Visualisasi Peta Perhatian Grad-CAM
+            </h1>
+            <p class="text-slate-400 text-xs sm:text-sm mt-1">
+                Berkas: <span class="text-slate-200 font-mono font-medium">{{ record.original_filename }}</span> • Dianalisis pada {{ record.timestamp }}
+            </p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-3 no-print">
+            <button onclick="window.print()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:text-white transition-all shadow-lg">
+                <i data-lucide="printer" class="w-4 h-4 text-slate-400"></i>
+                Cetak Laporan PDF
+            </button>
+            <a href="{{ url_for('detect') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-950 bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all">
+                <i data-lucide="crosshair" class="w-4 h-4"></i>
+                Visualisasikan Foto Lain
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Grid Content -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        <!-- LEFT COLUMN: Interactive Grad-CAM Heatmap Viewer (5 Cols) -->
+        <div class="lg:col-span-5 flex flex-col gap-6 lg:sticky lg:top-24">
+            
+            <div class="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 shadow-2xl relative">
+                
+                <!-- Viewer Mode Tabs & Target Toggle -->
+                <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <span class="text-xs font-mono text-slate-400 flex items-center gap-1.5 font-semibold">
+                        <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i>
+                        GRAD-CAM VIEWER
+                    </span>
+                    <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                        <button onclick="setViewerMode('blend')" id="btn-mode-blend" class="px-3 py-1.5 rounded-lg font-bold transition-all bg-cyan-600 text-white shadow">Overlay</button>
+                        <button onclick="setViewerMode('orig')" id="btn-mode-orig" class="px-3 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition-all">Asli</button>
+                        <button onclick="setViewerMode('heat')" id="btn-mode-heat" class="px-3 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition-all">Heatmap</button>
+                        <button onclick="setViewerMode('split')" id="btn-mode-split" class="px-3 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition-all">Side-by-Side</button>
+                    </div>
+                </div>
+
+                <!-- Display Box (Single View Container) -->
+                <div id="single-view-container" class="relative rounded-2xl overflow-hidden bg-slate-950 aspect-square flex items-center justify-center border border-cyan-500/40 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
+                    
+                    <!-- 1. Original Face Image (Base Layer) -->
+                    <img id="img-orig-base" src="{{ url_for('static', filename='uploads/' + record.saved_filename) }}" alt="Foto Asli" class="absolute inset-0 w-full h-full object-cover select-none">
+                    
+                    <!-- 2. Heatmap Image (Overlay Layer with CSS opacity controllable by slider) -->
+                    <img id="img-heat-overlay" src="{{ url_for('static', filename='uploads/' + record.heatmap_filename) }}" alt="Heatmap Grad-CAM" class="absolute inset-0 w-full h-full object-cover select-none mix-blend-screen transition-opacity duration-75" style="opacity: 0.65;">
+
+                    <!-- 3. TANDA GRAD-CAM: Kotak Sasaran Organ Wajah Presisi (Target Bounding Boxes) -->
+                    <div id="target-boxes-overlay" class="absolute inset-0 pointer-events-none z-20">
+                        {% for box in target_boxes %}
+                        <div id="{{ box.id }}" class="target-marker-box absolute rounded-xl border-2 transition-all duration-300 border-cyan-400/90 bg-cyan-500/10 shadow-[0_0_15px_rgba(6,182,212,0.3)] animate-target-box" style="left: {{ box.left_pct }}%; top: {{ box.top_pct }}%; width: {{ box.width_pct }}%; height: {{ box.height_pct }}%;">
+                            <!-- Corner Accents -->
+                            <span class="absolute -top-1 -left-1 w-2.5 h-2.5 border-t-2 border-l-2 border-cyan-300"></span>
+                            <span class="absolute -top-1 -right-1 w-2.5 h-2.5 border-t-2 border-r-2 border-cyan-300"></span>
+                            <span class="absolute -bottom-1 -left-1 w-2.5 h-2.5 border-b-2 border-l-2 border-cyan-300"></span>
+                            <span class="absolute -bottom-1 -right-1 w-2.5 h-2.5 border-b-2 border-r-2 border-cyan-300"></span>
+                            
+                            <!-- Floating Tag -->
+                            <div class="absolute -top-3 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-cyan-600 text-white shadow-md whitespace-nowrap flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                                <span>{{ box.name }} ({{ box.score }}%)</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- 4. TANDA GRAD-CAM: Laser Peak Crosshair Pin -->
+                    <div id="peak-pin" class="absolute z-25 pointer-events-none transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center" style="left: {{ (record.peak_x / 224 * 100) }}%; top: {{ (record.peak_y / 224 * 100) }}%;">
+                        <div class="relative flex items-center justify-center">
+                            <span class="w-8 h-8 rounded-full bg-cyan-400/40 animate-ping absolute"></span>
+                            <span class="w-5 h-5 rounded-full border-2 border-white bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,1)] flex items-center justify-center relative z-10">
+                                <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                            </span>
+                        </div>
+                        <div class="bg-slate-950/95 text-[10px] font-mono font-bold text-cyan-300 border-cyan-500/60 px-2.5 py-0.5 rounded-full border shadow-xl mt-1.5 whitespace-nowrap flex items-center gap-1">
+                            <i data-lucide="crosshair" class="w-3 h-3 text-cyan-400"></i>
+                            <span>{{ details.peak_name or 'Titik Puncak Grad-CAM' }} ({{ record.peak_x }}, {{ record.peak_y }})</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Display Box (Side-by-Side Split View Container, hidden by default) -->
+                <div id="split-view-container" class="hidden grid-cols-2 gap-2 aspect-square rounded-2xl overflow-hidden bg-slate-950 p-1 border border-slate-800">
+                    <div class="relative rounded-xl overflow-hidden bg-slate-900">
+                        <img src="{{ url_for('static', filename='uploads/' + record.saved_filename) }}" alt="Foto Wajah" class="w-full h-full object-cover">
+                        <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white">Citra Wajah</div>
+                    </div>
+                    <div class="relative rounded-xl overflow-hidden bg-slate-900">
+                        <img src="{{ url_for('static', filename='uploads/' + record.heatmap_filename) }}" alt="Heatmap Grad-CAM" class="w-full h-full object-cover">
+                        <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-cyan-300">Heatmap Grad-CAM</div>
+                    </div>
+                </div>
+
+                <!-- Targeting Controls Bar -->
+                <div class="mt-4 flex items-center justify-between text-xs font-mono bg-slate-950 p-2.5 rounded-2xl border border-slate-800/80">
+                    <span class="text-slate-300 flex items-center gap-1.5 font-semibold">
+                        <i data-lucide="target" class="w-3.5 h-3.5 text-cyan-400"></i>
+                        Tanda Sasaran Grad-CAM:
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="toggle-targets-btn" onclick="toggleTargetBoxes()" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-600/50 transition-all flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                            <span>Kotak Sasaran: ON</span>
+                        </button>
+                        <button type="button" id="toggle-crosshair-btn" onclick="toggleCrosshair()" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-600/50 transition-all flex items-center gap-1">
+                            <span>Pin Puncak: ON</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Interactive Opacity Slider -->
+                <div id="opacity-slider-box" class="mt-4 pt-3 border-t border-slate-800/80">
+                    <div class="flex items-center justify-between text-xs font-mono mb-2">
+                        <span class="text-slate-400 flex items-center gap-1.5">
+                            <i data-lucide="sliders" class="w-3.5 h-3.5 text-cyan-400"></i>
+                            Transparansi Heatmap Grad-CAM
+                        </span>
+                        <span id="slider-val-label" class="font-bold text-cyan-300">65%</span>
+                    </div>
+                    <input type="range" id="opacity-slider" min="0" max="100" value="65" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex justify-between text-[10px] font-mono text-slate-400 mt-1">
+                        <span>0% (Citra Polos)</span>
+                        <span>50% (Campuran Imbang)</span>
+                        <span>100% (Heatmap Penuh)</span>
+                    </div>
+                </div>
+
+                <!-- Heatmap Color Legend Scale -->
+                <div class="mt-4 pt-4 border-t border-slate-800/80">
+                    <div class="text-[11px] font-mono font-semibold text-slate-300 mb-2 flex items-center justify-between">
+                        <span>SKALA INTENSITAS AKTIVASI (COLORMAP JET)</span>
+                        <span class="text-[10px] text-slate-400">ReLU(Σ α_k A^k)</span>
+                    </div>
+                    <div class="w-full h-3 rounded-full bg-gradient-to-r from-blue-700 via-cyan-400 via-yellow-400 to-red-600 shadow-inner"></div>
+                    <div class="flex justify-between text-[10px] font-mono text-slate-400 mt-1.5">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-600"></span> 0: Aktivasi Rendah</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-yellow-400"></span> 128: Perhatian Sedang</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-600"></span> 255: Fokus Tertinggi</span>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: Profil Perhatian Grad-CAM & Diagnosis Organ (7 Cols) -->
+        <div class="lg:col-span-7 flex flex-col gap-6">
+            
+            <!-- Focus Summary Card -->
+            <div class="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-cyan-950/40 via-slate-900 to-slate-900 border border-cyan-500/40 shadow-[0_0_35px_rgba(6,182,212,0.15)] backdrop-blur-xl">
+                
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                    <div>
+                        <div class="text-xs font-mono tracking-wider uppercase mb-1 text-cyan-400">
+                            PROFIL PERHATIAN GRAD-CAM
+                        </div>
+                        <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-3">
+                            <i data-lucide="target" class="w-9 h-9 text-cyan-400"></i>
+                            {{ details.primary_focus or record.result }}
+                        </h2>
+                        <p class="text-xs sm:text-sm text-slate-300 mt-2 max-w-lg leading-relaxed">
+                            Model konvolusional ResNet-18 memusatkan bobot gradien terbesarnya pada bagian ini untuk mengenali karakteristik dan geometri spasial wajah.
+                        </p>
+                    </div>
+
+                    <!-- Circular Intensity Badge -->
+                    <div class="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex-shrink-0 min-w-[140px]">
+                        <div class="text-[10px] font-mono text-slate-400 tracking-wider">INTENSITAS AKTIVASI</div>
+                        <div class="text-3xl sm:text-4xl font-black font-mono mt-1 text-cyan-400">
+                            {{ record.confidence }}%
+                        </div>
+                        <div class="text-[10px] font-mono text-slate-400 mt-0.5">Tingkat Perhatian</div>
+                    </div>
+                </div>
+
+                <!-- Regional Progress Distribution -->
+                <div class="mt-6 pt-6 border-t border-slate-800/80">
+                    <div class="flex justify-between text-xs font-mono mb-2">
+                        <span class="text-slate-300 flex items-center gap-1.5">
+                            <i data-lucide="crosshair" class="w-3.5 h-3.5 text-cyan-400"></i> Titik Pusat: <b>{{ details.peak_name or 'Fitur Wajah' }}</b>
+                        </span>
+                        <span class="text-cyan-300 font-bold">
+                            Koordinat ({{ record.peak_x }}, {{ record.peak_y }})
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Explainable AI (XAI) Transparency Card -->
+            <div class="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 backdrop-blur-xl">
+                <div class="flex items-center gap-2 mb-3">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-cyan-400"></i>
+                    <h3 class="text-base font-bold text-white tracking-tight">
+                        Penjelasan Transparansi Grad-CAM (Explainable AI)
+                    </h3>
+                </div>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
+                    {{ xai_summary }}
+                </p>
+            </div>
+
+            <!-- 4 Anatomical Focus Diagnosis Cards (Interactive Linking) -->
+            <div>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="scan-face" class="w-4 h-4 text-cyan-400"></i>
+                        Distribusi Perhatian 4 Organ Wajah
+                    </h3>
+                    <span class="text-xs font-mono text-cyan-400">Klik kartu untuk menyorot organ</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {% for reg in regions %}
+                    <div onclick="highlightRegion('{{ reg.id }}')" class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/50 flex flex-col justify-between cursor-pointer transition-all duration-200 group">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-bold text-white flex items-center gap-1.5 group-hover:text-cyan-300 transition-colors">
+                                    <i data-lucide="{{ reg.icon }}" class="w-3.5 h-3.5 text-cyan-400"></i>
+                                    {{ reg.name }}
+                                </span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                    {{ reg.status }}
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-slate-300 leading-relaxed mt-1">
+                                {{ reg.explanation }}
+                            </p>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[10px] font-mono">
+                            <span class="text-slate-400">Intensitas Grad-CAM:</span>
+                            <span class="font-bold text-cyan-300">{{ reg.score }}%</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Technical XAI Parameters Accordion / Box -->
+            <div class="p-5 rounded-3xl bg-slate-950/60 border border-slate-800 text-xs font-mono">
+                <div class="text-slate-300 font-bold mb-3 flex items-center gap-2">
+                    <i data-lucide="cpu" class="w-4 h-4 text-cyan-400"></i>
+                    METADATA SPESIFIKASI TEKNIS MODEL & GRAD-CAM
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-[11px] text-slate-400">
+                    <div>
+                        <div class="text-slate-400">Model Arsitektur:</div>
+                        <div class="text-slate-200 font-bold mt-0.5">{{ record.model_name }}</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-400">Target Conv Layer:</div>
+                        <div class="text-cyan-400 font-bold mt-0.5 truncate">{{ record.target_layer }}</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-400">Waktu Komputasi:</div>
+                        <div class="text-slate-200 font-bold mt-0.5">{{ tech.execution_time_sec or '0.5' }} detik</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-400">Titik Koordinat Puncak:</div>
+                        <div class="text-cyan-400 font-bold mt-0.5">X={{ record.peak_x }}, Y={{ record.peak_y }}</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-400">Energi Gradien (||∇A||):</div>
+                        <div class="text-slate-200 font-bold mt-0.5">{{ tech.gradient_energy or '0.412' }}</div>
+                    </div>
+                    <div>
+                        <div class="text-slate-400">Resolusi Matriks CAM:</div>
+                        <div class="text-slate-200 font-bold mt-0.5">{{ tech.input_resolution or '224x224 RGB' }}</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const imgHeatOverlay = document.getElementById('img-heat-overlay');
+    const opacitySlider = document.getElementById('opacity-slider');
+    const sliderValLabel = document.getElementById('slider-val-label');
+    const peakPin = document.getElementById('peak-pin');
+    const singleContainer = document.getElementById('single-view-container');
+    const splitContainer = document.getElementById('split-view-container');
+    const opacitySliderBox = document.getElementById('opacity-slider-box');
+    const targetBoxesOverlay = document.getElementById('target-boxes-overlay');
+    const toggleTargetsBtn = document.getElementById('toggle-targets-btn');
+    const toggleCrosshairBtn = document.getElementById('toggle-crosshair-btn');
+
+    const btnBlend = document.getElementById('btn-mode-blend');
+    const btnOrig = document.getElementById('btn-mode-orig');
+    const btnHeat = document.getElementById('btn-mode-heat');
+    const btnSplit = document.getElementById('btn-mode-split');
+    const buttons = [btnBlend, btnOrig, btnHeat, btnSplit];
+
+    let targetsVisible = true;
+    let crosshairVisible = true;
+
+    // Real-time Opacity slider interaction
+    opacitySlider.addEventListener('input', (e) => {
+        const val = e.target.value;
+        sliderValLabel.textContent = `${val}%`;
+        imgHeatOverlay.style.opacity = (val / 100);
+    });
+
+    function setViewerMode(mode) {
+        buttons.forEach(b => {
+            b.classList.remove('bg-cyan-600', 'text-white', 'shadow');
+            b.classList.add('text-slate-400');
+        });
+
+        singleContainer.classList.remove('hidden');
+        splitContainer.classList.add('hidden');
+        opacitySliderBox.classList.remove('hidden');
+
+        if (mode === 'blend') {
+            btnBlend.classList.add('bg-cyan-600', 'text-white', 'shadow');
+            btnBlend.classList.remove('text-slate-400');
+            opacitySlider.value = 65;
+            sliderValLabel.textContent = '65%';
+            imgHeatOverlay.style.opacity = 0.65;
+            peakPin.classList.remove('hidden');
+            targetBoxesOverlay.classList.remove('hidden');
+        } else if (mode === 'orig') {
+            btnOrig.classList.add('bg-cyan-600', 'text-white', 'shadow');
+            btnOrig.classList.remove('text-slate-400');
+            opacitySlider.value = 0;
+            sliderValLabel.textContent = '0%';
+            imgHeatOverlay.style.opacity = 0.0;
+            peakPin.classList.add('hidden');
+            targetBoxesOverlay.classList.add('hidden');
+        } else if (mode === 'heat') {
+            btnHeat.classList.add('bg-cyan-600', 'text-white', 'shadow');
+            btnHeat.classList.remove('text-slate-400');
+            opacitySlider.value = 100;
+            sliderValLabel.textContent = '100%';
+            imgHeatOverlay.style.opacity = 1.0;
+            peakPin.classList.remove('hidden');
+            targetBoxesOverlay.classList.remove('hidden');
+        } else if (mode === 'split') {
+            btnSplit.classList.add('bg-cyan-600', 'text-white', 'shadow');
+            btnSplit.classList.remove('text-slate-400');
+            singleContainer.classList.add('hidden');
+            splitContainer.classList.remove('hidden');
+            splitContainer.classList.add('grid');
+            opacitySliderBox.classList.add('hidden');
+        }
+    }
+
+    function toggleTargetBoxes() {
+        targetsVisible = !targetsVisible;
+        if (targetsVisible) {
+            targetBoxesOverlay.classList.remove('hidden');
+            toggleTargetsBtn.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span><span>Kotak Sasaran: ON</span>';
+            toggleTargetsBtn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-600/50 transition-all flex items-center gap-1';
+        } else {
+            targetBoxesOverlay.classList.add('hidden');
+            toggleTargetsBtn.innerHTML = '<span>Kotak Sasaran: OFF</span>';
+            toggleTargetsBtn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-900 text-slate-500 border border-slate-800 hover:text-white transition-all flex items-center gap-1';
+        }
+    }
+
+    function toggleCrosshair() {
+        crosshairVisible = !crosshairVisible;
+        if (crosshairVisible) {
+            peakPin.classList.remove('hidden');
+            toggleCrosshairBtn.innerHTML = '<span>Pin Puncak: ON</span>';
+            toggleCrosshairBtn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-600/50 transition-all flex items-center gap-1';
+        } else {
+            peakPin.classList.add('hidden');
+            toggleCrosshairBtn.innerHTML = '<span>Pin Puncak: OFF</span>';
+            toggleCrosshairBtn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-900 text-slate-500 border border-slate-800 hover:text-white transition-all flex items-center gap-1';
+        }
+    }
+
+    function highlightRegion(regionId) {
+        const boxIdMap = {
+            'eyes': 'box_eyes',
+            'jawline': 'box_jawline',
+            'mouth': 'box_mouth',
+            'skin': 'box_skin'
+        };
+        const targetBoxId = boxIdMap[regionId];
+        const el = document.getElementById(targetBoxId);
+        if (el) {
+            el.classList.remove('hidden');
+            el.classList.add('ring-4', 'ring-white', 'scale-[1.04]');
+            setTimeout(() => {
+                el.classList.remove('ring-4', 'ring-white', 'scale-[1.04]');
+            }, 1200);
+        }
+    }
+</script>
+{% endblock %}

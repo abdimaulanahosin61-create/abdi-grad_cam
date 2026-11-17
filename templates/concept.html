@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Alur Sistem & Konsep Visualisasi Grad-CAM (Explainable AI){% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16">
+    
+    <!-- Header -->
+    <div class="text-center max-w-3xl mx-auto mb-12">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 text-xs font-mono font-semibold tracking-wide mb-3">
+            <i data-lucide="git-branch" class="w-3.5 h-3.5 text-cyan-400"></i>
+            ARSITEKTUR & FLOWCHART
+        </div>
+        <h1 class="text-3xl sm:text-5xl font-black text-white tracking-tight">
+            Alur Sistem Visualisasi Grad-CAM Wajah
+        </h1>
+        <p class="text-sm sm:text-base text-slate-300 mt-3 leading-relaxed">
+            Sistem Informasi & Transparansi AI: Menguraikan implementasi 5 tahap visualisasi peta perhatian jaringan konvolusional (Grad-CAM) pada fitur-fitur wajah.
+        </p>
+    </div>
+
+    <!-- Infographic Diagram Showcase Card -->
+    <div class="p-6 sm:p-10 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-2xl backdrop-blur-xl mb-16 text-center">
+        <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-800">
+            <div class="flex items-center gap-2 text-xs font-mono text-cyan-400 font-bold">
+                <i data-lucide="image" class="w-4 h-4"></i>
+                DIAGRAM ACUAN ALUR SISTEM
+            </div>
+            <span class="text-xs font-mono text-slate-400">Implementasi Berbasis Gambar Referensi</span>
+        </div>
+
+        <div class="max-w-4xl mx-auto rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl bg-slate-950 p-2">
+            <img src="{{ url_for('static', filename='img/diagram-flow.jpg') }}" alt="Diagram Alur Sistem Deteksi dengan Grad-CAM" class="w-full h-auto rounded-xl mx-auto">
+        </div>
+
+        <div class="mt-4 text-xs font-mono text-slate-400">
+            Judul Proyek: <i>Implementasi Grad-CAM Sebagai Visualisasi Explainable AI Pada Sistem Deteksi...</i>
+        </div>
+    </div>
+
+    <!-- 5 Deep-Dive Stages -->
+    <div class="space-y-8 mb-16">
+        
+        <!-- Stage 1 -->
+        <div class="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 backdrop-blur-xl flex flex-col md:flex-row gap-6 items-start">
+            <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono font-black text-xl flex items-center justify-center flex-shrink-0">
+                1
+            </div>
+            <div class="flex-grow">
+                <div class="inline-block px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-950/60 text-cyan-300 border border-cyan-500/30 mb-2">
+                    TAHAP 1: MODEL AI KAMU
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">1. Model AI Kamu (Implementasi Grad-CAM di Atas Model)</h3>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Sistem menggunakan jaringan saraf konvolusi berbasis arsitektur <b>ResNet-18</b>. Layer konvolusi terdalam (<code>layer4[-1].conv2</code> dengan 512 channels) dipilih sebagai target pengait (*hook*) Grad-CAM karena layer ini mempertahankan informasi spasial berlevel tinggi sekaligus fitur semantik paling kaya sebelum Global Average Pooling.
+                </p>
+                <div class="mt-4 p-4 rounded-2xl bg-slate-950 border border-slate-800/80 font-mono text-xs text-slate-300">
+                    <span class="text-slate-400"># Registrasi Hook PyTorch pada Conv Layer Terakhir:</span><br>
+                    <span class="text-cyan-400">target_layer</span> = model.layer4[-1].conv2<br>
+                    target_layer.register_forward_hook(forward_hook)<br>
+                    target_layer.register_full_backward_hook(backward_hook)
+                </div>
+            </div>
+        </div>
+
+        <!-- Stage 2 -->
+        <div class="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 backdrop-blur-xl flex flex-col md:flex-row gap-6 items-start">
+            <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-mono font-black text-xl flex items-center justify-center flex-shrink-0">
+                2
+            </div>
+            <div class="flex-grow">
+                <div class="inline-block px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-950/60 text-indigo-300 border border-indigo-500/30 mb-2">
+                    TAHAP 2: VISUALISASI GRAD-CAM
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">2. Visualisasi Grad-CAM (Explainable AI: Peta Perhatian Wajah)</h3>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Menghilangkan sifat <i>Black-Box</i> dengan memvisualisasikan gradien kelas \(Y^c\) terhadap feature map \(A^k\). Bobot kepentingan neuron dihitung melalui Global Average Pooling:
+                </p>
+                <div class="my-3 p-4 rounded-2xl bg-slate-950 border border-slate-800/80 font-mono text-xs text-indigo-300 text-center">
+                    \[\alpha_k^c = \frac{1}{Z} \sum_{i} \sum_{j} \frac{\partial Y^c}{\partial A_{i,j}^k} \quad \longrightarrow \quad L_{\text{Grad-CAM}}^c = \text{ReLU}\left( \sum_{k} \alpha_k^c A^k \right)\]
+                </div>
+                <p class="text-xs text-slate-400 leading-relaxed">
+                    Aktivasi positif disaring menggunakan fungsi aktivasi <b>ReLU</b> karena hanya piksel yang berkontribusi positif terhadap target yang divisualisasikan. Peta aktivasi dinormalisasi \([0, 1]\) dan dirender dengan <b>OpenCV Colormap JET</b> dipandu oleh landmark fitur wajah (YuNet).
+                </p>
+            </div>
+        </div>
+
+        <!-- Stage 3 -->
+        <div class="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 backdrop-blur-xl flex flex-col md:flex-row gap-6 items-start">
+            <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono font-black text-xl flex items-center justify-center flex-shrink-0">
+                3
+            </div>
+            <div class="flex-grow">
+                <div class="inline-block px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 mb-2">
+                    TAHAP 3: WEBSITE FLASK
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">3. Pengembangan Website Flask (Frontend + Backend)</h3>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Website dibangun menggunakan microframework Python <b>Flask</b> yang menghubungkan engine komputasi PyTorch & OpenCV dengan antarmuka web modern. Sistem menyediakan endpoint REST API terpadu (<code>/api/detect</code>), basis data SQLite (<code>deepfake_gradcam.db</code>), dan manajemen sesi pengguna yang aman dan cepat.
+                </p>
+            </div>
+        </div>
+
+        <!-- Stage 4 -->
+        <div class="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 backdrop-blur-xl flex flex-col md:flex-row gap-6 items-start">
+            <div class="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono font-black text-xl flex items-center justify-center flex-shrink-0">
+                4
+            </div>
+            <div class="flex-grow">
+                <div class="inline-block px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-950/60 text-amber-300 border border-amber-500/30 mb-2">
+                    TAHAP 4: ANTARMUKA PENGGUNA
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">4. Antarmuka Pengguna (UI/UX: Heatmap Mudah Dipahami)</h3>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Dirancang dengan tema high-tech dark theme yang intuitif. Memudahkan pengguna melihat tanda sasaran Grad-CAM melalui:
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-xs font-mono text-slate-300">
+                    <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <b class="text-cyan-400">• Slider Transparansi Heatmap:</b> Mengatur percampuran citra asli vs heatmap 0% s/d 100%.
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <b class="text-amber-400">• 4 Kotak Sasaran Landmark:</b> Penandaan otomatis pada mata, mulut, rahang, dan kulit.
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <b class="text-rose-400">• Titik Puncak Koordinat:</b> Penanda lokasi piksel dengan aktivasi konvolusi tertinggi (X, Y).
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <b class="text-emerald-400">• Cetak Laporan PDF:</b> Dokumentasi analisis visual siap cetak.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stage 5 -->
+        <div class="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 backdrop-blur-xl flex flex-col md:flex-row gap-6 items-start">
+            <div class="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 font-mono font-black text-xl flex items-center justify-center flex-shrink-0">
+                5
+            </div>
+            <div class="flex-grow">
+                <div class="inline-block px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-950/60 text-rose-300 border border-rose-500/30 mb-2">
+                    TAHAP 5: MANAJEMEN SISTEM & PENGUJIAN
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">5. Manajemen Sistem & Pengujian Black-Box</h3>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Sistem dilengkapi dengan test suite black-box otomatis yang memvalidasi integritas data, validasi masukan (input sanitization), pembentukan berkas heatmap, dan fungsionalitas API. Pengujian dapat dipicu secara visual melalui dasbor maupun via terminal CLI.
+                </p>
+                <div class="mt-4 flex flex-wrap gap-2 text-[10px] font-mono">
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">TC-01: Citra Wajah</span>
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">TC-02: Grad-CAM Heatmap</span>
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">TC-03: Filter Ekstensi</span>
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">TC-04: Form Kosong</span>
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">TC-05: Artefak Heatmap</span>
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">TC-06: REST API</span>
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">TC-07: DB CRUD</span>
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">TC-08: Tanda Sasaran XAI</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Bottom CTA -->
+    <div class="text-center">
+        <a href="{{ url_for('detect') }}" class="inline-flex items-center gap-2 px-8 py-4 rounded-2xl text-sm font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all">
+            <i data-lucide="crosshair" class="w-4 h-4"></i>
+            Mulai Visualisasi Grad-CAM Sekarang
+        </a>
+    </div>
+
+</div>
+{% endblock %}
